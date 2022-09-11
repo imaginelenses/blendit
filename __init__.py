@@ -19,30 +19,43 @@ except ModuleNotFoundError:
     import ensurepip
     ensurepip._main()
 
-# Ensure Dulwich is installed
+# Get executable path
+executable = sys.executable
+
+"""
+    Debian Bug: pygit2 import fails if /usr/lib/ssl/certs does not exist
+    https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1011714
+    Create ../bin/certs directory if on linux to overcome this bug
+"""
+import platform
+if platform.system() == "Linux":
+    # Create ../bin/certs directory
+    binPath = os.path.join("/", *executable.split("/")[:-1])
+    certsPath = os.path.join(binPath, "certs")
+    os.makedirs(certsPath, exist_ok=True)
+
+    # Set SSL_CERT_DIR environment variable
+    os.environ["SSL_CERT_DIR"] = certsPath
+
+# Ensure Pygit2 is installed
 try:
-    from dulwich import porcelain as git
+    import pygit2 as git
 except ModuleNotFoundError:
-    # ../lib/pythonX.XX/os.py -> ../bin/pythonX.XX
-    pyVerion = os.__file__.split("/")[-2]
-    executable = os.path.join("/", *os.__file__.split("/")[:-3], "bin", pyVerion)
-    
     # Upgrade pip
     try:
-        subprocess.check_call([executable, "-m", "pip", "install", "-U", "pip"])
+        subprocess.check_call([executable, "-m", "pip", "install", "-U", "pip", "--no-cache-dir"])
     except subprocess.CalledProcessError as e:
         print(f"Pip is upto data. {e}")
 
-    # Install Dulwich https://www.dulwich.io/
-    subprocess.check_call([executable, "-m", "pip", "install", "dulwich", "--no-cache-dir"])
+    # Install Pygit2
+    subprocess.check_call([executable, "-m", "pip", "install", "pygit2", "--no-cache-dir"])
     
-    from dulwich import porcelain as git
+    import pygit2 as git
 
-if (git.__name__ == "dulwich.porcelain"):
-    print("Dulwich is installed.")
+print(f"{git.__name__} is installed.")
 
 # Local imports implemented to support Blender refreshes
-modulesNames = ["newProject", "openProject", "reports", "startMenu", "subscriptions", "commitsPanel"]
+modulesNames = ["newProject", "openProject", "reports", "startMenu", "subscriptions","sourceControl", "commitsPanel"]
 for module in modulesNames:
     if module in sys.modules:
         importlib.reload(sys.modules[module])
@@ -90,7 +103,7 @@ def loadPostHandler(_):
     bpy.ops.wm.splash('INVOKE_DEFAULT')
     
     # Message bus subscription
-    subscriptions.unsubscribe()
+    subscriptions.subscribe()
 
 
 def register():

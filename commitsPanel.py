@@ -1,17 +1,17 @@
-import os
 import sys
 import importlib
-from datetime import datetime, timezone
+from datetime import datetime
 
 import bpy
-from bpy.types import Operator, Panel, PropertyGroup, UIList
-from bpy.props import CollectionProperty, EnumProperty, IntProperty, PointerProperty, StringProperty
+from bpy.types import Panel, PropertyGroup, UIList
+from bpy.props import (CollectionProperty, EnumProperty, IntProperty,
+                       PointerProperty, StringProperty)
 
-from dulwich import porcelain as git
-from dulwich.errors import NotGitRepository
+import pygit2 as git
+from pygit2._pygit2 import GitError
 
 # Local imports implemented to support Blender refreshes
-modulesNames = ["gitHelpers"]
+modulesNames = ["gitHelpers", "openProject", "sourceControl"]
 for module in modulesNames:
     if module in sys.modules:
         importlib.reload(sys.modules[module])
@@ -20,9 +20,16 @@ for module in modulesNames:
         globals()[module] = importlib.import_module(f"{parent}.{module}")
 
 
+BRANCH_ICON = 'IPO_BEZIER'
+NEW_BRANCH_ICON = 'ADD'
+CLEAR_ICON = 'X'
+COMMENT_ICON = 'IPO_BEZIER'
+
+
 class BlenditCommitsListItem(PropertyGroup):
-    commit: StringProperty(description="Unique ID of commit")
-    author: StringProperty(description="Author of commit")
+    id: StringProperty(description="Unique ID of commit")
+    name: StringProperty(description="Name of commiter")
+    email: StringProperty(description="Email of commiter")
     date: StringProperty(description="Date of commit")
     message: StringProperty(description="Commit message")
 
@@ -30,41 +37,67 @@ class BlenditCommitsListItem(PropertyGroup):
 class BlenditPanelData(PropertyGroup):
     def getBranches(self, context):
         filepath = bpy.path.abspath("//")
-
         try:
-            branches = git.branch_list(filepath)
-        except NotGitRepository:
+            repo = git.Repository(filepath)
+        except GitError:
             return []
 
-        activeBranch = git.active_branch(filepath).decode("utf-8")
+        branches = repo.listall_branches()
+        activeBranch = repo.head.shorthand
 
         branchList = []
         for index, branch in enumerate(branches):
-            branch = branch.decode("utf-8")
             if branch == activeBranch:
                 index = -1
-            branchList.append((branch, branch, f"Branch: '{branch}'", 'IPO_BEZIER', index))
+            branchList.append((branch, branch, f"Branch: '{branch}'", 
+                               BRANCH_ICON, index))
 
         return branchList
 
-    def setActiveBranch(self, value):
-        # TODO change branch 
-        pass
+    def setActiveBranch(self, context):
+        filepath = bpy.path.abspath("//")
+        filename = bpy.path.basename(bpy.data.filepath).split(".")[0]
+
+        try:
+            repo = git.Repository(filepath)
+        except GitError:
+            return
+
+        # Get branch fullname
+        name = context.window_manager.blendit.branches
+        branch = repo.lookup_branch(name)
+        if not branch:
+            return
+
+        # Checkout branch
+        ref = repo.lookup_reference(branch.name)
+        repo.checkout(ref)
+
+        # Load new blend file
+        bpy.ops.wm.read_homefile(app_template="blendit")
+
+        # Regen file
+        openProject.regenFile(filepath, filename)
 
     branches: EnumProperty(
         name="Branch",
-        description="Current Branch.",
+        description="Current Branch",
         items=getBranches,
         default=-1,
         options={'ANIMATABLE'},
-        update=None,
-        get=None,
-        set=None       
+        update=setActiveBranch     
+    )
+
+    newBranchName: StringProperty(
+        name="Name",
+        options={'TEXTEDIT_UPDATE'},
+        description="Name of new Branch"
     )
 
     commitMessage: StringProperty(
         name="",
-        description="A short description of the changes made."
+        options={'TEXTEDIT_UPDATE'},
+        description="A short description of the changes made"
     )
 
     commitsList: CollectionProperty(type=BlenditCommitsListItem)
@@ -95,67 +128,59 @@ class BlenditCommitsList(UIList):
         split = layout.split(factor=0.825)
         
         col1 = split.column()
-        col1.label(text=item.message, icon='LAYER_USED')
+        col1.label(text=item.message, icon=COMMENT_ICON)
+
+        # Get last mofied string
+        commitTime = datetime.strptime(item.date, gitHelpers.GIT_TIME_FORMAT)
+        lastModified = gitHelpers.getLastModifiedStr(commitTime)
 
         col2 = split.column()
+        col2.label(text=lastModified)
 
-        """
-            Get time difference
-            Format: Sun Sep 04 2022 19:53:39 +0530
-        """
-        now = datetime.now(timezone.utc)
-        commitTime = datetime.strptime(item.date, "%a %b %d %Y %X %z")
-        delta = now - commitTime
 
-        days = delta.days
-        if days <= 0:
-            hours = delta.seconds // 3600
-            if hours <= 0:
-                mins = (delta.seconds // 60) % 60
-                if mins <= 0:
-                    secs = delta.seconds - hours * 3600 - mins * 60
-                    if secs <= 0:
-                        col2.label(text="now")
-                    
-                    # Secs
-                    elif secs == 1:
-                        col2.label(text=f"{mins} sec")
-                    else:
-                        col2.label(text=f"{mins} sec")
+class BlenditNewBranchPanel(BlenditPanelMixin, Panel):
+    """Add New Branch"""
 
-                # Mins
-                elif mins == 1:
-                    col2.label(text=f"{mins} min")
-                else:
-                    col2.label(text=f"{mins} mins")
+    bl_idname = "BLENDIT_PT_new_branch_panel"
+    bl_label = ""
+    bl_options = {'INSTANCED'}
 
-            # Hours
-            elif hours == 1:
-                col2.label(text=f"{hours} hr")
-            else:
-                col2.label(text=f"{hours} hrs")
+    def draw(self, context):
+        layout = self.layout
         
-        # Days
-        elif days == 1:
-            col2.label(text=f"{days} day")
-        else:
-            col2.label(text=f"{days} days")
+        layout.label(text="New Branch", icon=BRANCH_ICON)
+
+        layout.prop(context.window_manager.blendit, "newBranchName")
+        name = context.window_manager.blendit.newBranchName
+        
+        row = layout.row()
+        if not name:
+            row.enabled = False
+
+        branch = row.operator(sourceControl.BlenditNewBranch.bl_idname, 
+                        text="Create Branch")
+        branch.name = name
 
 
 class BlenditSubPanel1(BlenditPanelMixin, Panel):
     bl_idname = "BLENDIT_PT_sub_panel_1"
     bl_parent_id = BlenditPanel.bl_idname
     bl_label = ""
-    bl_options = {'HEADER_LAYOUT_EXPAND', 'DEFAULT_CLOSED'}
+    bl_options = {'DEFAULT_CLOSED'}
     
     def draw_header(self, context):
         layout = self.layout
-        layout.alignment = 'LEFT'
-        layout.prop(context.scene.blendit, "branches")
- 
+
+        row = layout.row(align=True)
+        row.prop(context.window_manager.blendit, "branches")
+        
+        col = row.column()
+        col.scale_x = 0.8
+        col.popover(BlenditNewBranchPanel.bl_idname, icon=NEW_BRANCH_ICON)
+
     def draw(self, context):
         layout = self.layout
-        blendit = context.scene.blendit
+        blendit = context.window_manager.blendit
 
         # List of Commits
         row = layout.row()
@@ -173,26 +198,33 @@ class BlenditSubPanel1(BlenditPanelMixin, Panel):
 
         if blendit.commitsList and blendit.commitsListIndex != 0:
             row = layout.row()
-            # TODO Switch to Commit
-            row.label(text="TODO Switch to Commit")
-
+            switch = row.operator(sourceControl.BlenditSwitchToCommit.bl_idname, 
+                                  text="Switch to Commit")
+            switch.id = blendit.commitsList[blendit.commitsListIndex]["id"]
+        
         # Add commits to list
         bpy.app.timers.register(addCommitsToList)
 
 
 def addCommitsToList():
-    commitsList = bpy.context.scene.blendit.commitsList
+    commitsList = bpy.context.window_manager.blendit.commitsList
     
     # Clear list
     commitsList.clear()
 
     # Get commits
     filepath = bpy.path.abspath("//")
-    commits = gitHelpers.getCommits(filepath)
+    try:
+        repo = git.Repository(filepath)
+    except GitError:
+        return
+
+    commits = gitHelpers.getCommits(repo)
     for commit in commits:
         item = commitsList.add()
-        item.commit = commit["commit"]
-        item.author = commit["author"]
+        item.id = commit["id"]
+        item.name = commit["name"]
+        item.email = commit["email"]
         item.date = commit["date"]
         item.message = commit["message"]
 
@@ -214,62 +246,27 @@ class BlenditSubPanel2(BlenditPanelMixin, Panel):
         col1.label(text="Message: ")
         
         col2 = row.column()
-        col2.prop(context.scene.blendit, "commitMessage")
+        col2.prop(context.window_manager.blendit, "commitMessage")
 
         row = layout.row()
-        message = context.scene.blendit.commitMessage
+        message = context.window_manager.blendit.commitMessage
         if not message:
             row.enabled = False
 
-        col1 = row.column()
-        commit = col1.operator(BlenditCommit.bl_idname, text="Commit Changes")
+        commit = row.operator(sourceControl.BlenditCommit.bl_idname, 
+                               text="Commit Changes")
         commit.message = message
 
-        col2 = row.column()
-        col2.operator(BlenditCancelCommit.bl_idname, text="Cancel")
 
-
-class BlenditCommit(Operator):
-    """Commit changes."""
-    
-    bl_label = "Create New Project"
-    bl_idname = "blendit.commit"
-
-    message: StringProperty(
-        name="",
-        default="Message",
-        description="A short description of the changes made"
-    )
-
-    def invoke(self, context, event):
-        filepath = bpy.path.abspath("//")
-        filename = bpy.path.basename(bpy.data.filepath).split(".")[0]
-
-        # Save .blend file (Writes commands to Python file and clears reports)
-        bpy.ops.wm.save_mainfile(filepath=os.path.join(filepath, f"{filename}.blend"))
-        print(self.message)
-        return {'FINISHED'}
-
-
-class BlenditCancelCommit(Operator):
-    """Clear Commit message."""
-
-    bl_label = "Create New Project"
-    bl_idname = "blendit.cancel_commit"
-
-    def invoke(self, context, event):
-        context.scene.blendit.commitMessage = ""
-        return {'FINISHED'}
-
-
-classes = (BlenditCommitsListItem, BlenditPanelData, BlenditPanel, BlenditCommitsList, 
-           BlenditSubPanel1, BlenditSubPanel2, BlenditCommit, BlenditCancelCommit)
+classes = (BlenditCommitsListItem, BlenditPanelData, BlenditPanel, 
+           BlenditCommitsList, BlenditNewBranchPanel, BlenditSubPanel1, 
+           BlenditSubPanel2)
 
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
 
-    bpy.types.Scene.blendit = PointerProperty(type=BlenditPanelData)
+    bpy.types.WindowManager.blendit = PointerProperty(type=BlenditPanelData)
 
 def unregister():
     for cls in classes:

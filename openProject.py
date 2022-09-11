@@ -6,11 +6,8 @@ import bpy
 from bpy_extras.io_utils import ExportHelper
 from bpy.props import StringProperty
 
-from dulwich import porcelain as git
-import dulwich.config
-import dulwich.server
-import dulwich.repo
-import dulwich.errors
+import pygit2 as git
+from pygit2._pygit2 import GitError
 
 # Local imports implemented to support Blender refreshes
 modulesNames = ["gitHelpers", "reports", "subscriptions"]
@@ -50,15 +47,16 @@ class BlenditOpenProject(bpy.types.Operator, ExportHelper):
     )
 
     # Get global/default git config if .gitconfig or .git/config exists
-    defaultConfig = dulwich.config.StackedConfig(dulwich.server.FileSystemBackend()).default()
     try:
-        defaultUser = defaultConfig.get("user", "name").decode("utf-8")
-    except KeyError:
-        defaultUser = "Artist"
-    try:
-        defaultEmail = defaultConfig.get("user", "email").decode("utf-8")
-    except KeyError:
-        defaultEmail = "artist@example.com"
+        defaultConfig = git.Config.get_global_config()
+    except OSError:
+        defaultConfig = {}
+    
+    defaultUser = (defaultConfig["user.name"] 
+            if "user.name"  in defaultConfig else "Artist")
+            
+    defaultEmail = (defaultConfig["user.email"] 
+            if "user.email" in defaultConfig else "artist@example.com")
     
     username: StringProperty(
         name="User",
@@ -77,23 +75,16 @@ class BlenditOpenProject(bpy.types.Operator, ExportHelper):
         self.username = self.defaultUser
         self.email = self.defaultEmail
 
-        layout = self.layout.box()
-        
+        layout = self.layout.box()        
         layout.label(text="Open Project")
-
 
         # Get repo user details
         try:
-            repo = dulwich.repo.Repo(root=self.filepath, bare=False)
-            git.status(repo)
-            try:
-                config = repo.get_config()
-                self.username = config.get("user", "name").decode("utf-8")
-                self.email = config.get("user", "email").decode("utf-8")
-            except KeyError:
-                pass
-            repo.close()
-        except dulwich.errors.NotGitRepository:
+            repo = git.Repository(self.filepath)
+            if "user.name" in repo.config and "user.email" in repo.config:
+                self.username = repo.config["user.name"]
+                self.email = repo.config["user.email"]
+        except GitError:
             layout.label(text="Cannot find Blendit project at this location.", icon="ERROR")
 
         if not self.username.strip():
@@ -125,39 +116,56 @@ class BlenditOpenProject(bpy.types.Operator, ExportHelper):
 
         # Configure git repo
         if username != self.defaultUser or email != self.defaultEmail:
-            repo = dulwich.repo.Repo(filepath)
+            repo = git.Repository(filepath)
             gitHelpers.configUser(repo, username, email)
         
-        # Unsubscribe message busses
-        subscriptions.unsubscribe()
-
-        # Import python file as a module named regen
-        regen = importRegen(filepath, filename)
-
-        # Regenerate blend file
-        area = context.screen.areas[0]
-        with context.temp_override(area=area):
-            # Current area type
-            currentType = area.type
-
-            # Change area type to INFO and delete all content                
-            area.type = 'VIEW_3D'
-            
-            regen.executeCommands()
-
-            # Restore area type
-            area.type = currentType
-        
-        # Clear reports
-        reports.clearReports()
-
-        # Save .blend file
-        bpy.ops.wm.save_mainfile(filepath=os.path.join(filepath, f"{filename}.blend"))
-
-        # Re-subscribe to message busses
-        subscriptions.subscribe()
+        regenFile(filepath, filename)
 
         return {'FINISHED'}
+
+
+def regenFile(filepath, filename):
+    # Unsubscribe message busses
+    subscriptions.unsubscribe()
+
+    # Import python file as a module named regen
+    regen = importRegen(filepath, filename)
+
+    # Regenerate blend file
+    window = bpy.context.window_manager.windows[0]
+    area = window.screen.areas[0]
+    with bpy.context.temp_override(window=window, area=area):
+        # Current area type
+        currentType = area.type
+
+        # Change area type to INFO and delete all content                
+        area.type = 'VIEW_3D'
+        
+        regen.executeCommands()
+
+        # Restore area type
+        area.type = currentType
+    
+    # Clear reports
+    reports.clearReports()
+
+    # Get save pre handler
+    savePreHandler = None
+    for handler in bpy.app.handlers.save_pre:
+        if handler.__name__ == "savePreHandler":
+            savePreHandler = handler
+
+    # Unregister save pre handler
+    bpy.app.handlers.save_pre.remove(savePreHandler)
+
+    # Save .blend file
+    bpy.ops.wm.save_mainfile(filepath=os.path.join(filepath, f"{filename}.blend"))
+
+    # Re-register save pre handler
+    bpy.app.handlers.save_pre.append(savePreHandler)
+
+    # Re-subscribe to message busses
+    subscriptions.subscribe()
 
 
 def importRegen(filepath, filename):

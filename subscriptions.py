@@ -32,9 +32,6 @@ def writeToFile(lines):
 def activeObjectCallback():
     """Called when active object changes"""
 
-    # Apply all transforms
-    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-
     objectsToSelect  = bpy.context.view_layer.objects.selected.keys()
     objectToActivate = bpy.context.view_layer.objects.active.__repr__()
     lines = [

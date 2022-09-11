@@ -6,12 +6,10 @@ import bpy
 from bpy_extras.io_utils import ExportHelper
 from bpy.props import StringProperty
 
-from dulwich import porcelain as git
-import dulwich.config
-import dulwich.server
+import pygit2 as git
 
 # Local imports implemented to support Blender refreshes
-modulesNames = ["gitHelpers"]
+modulesNames = ["gitHelpers", "reports"]
 for module in modulesNames:
     if module in sys.modules:
         importlib.reload(sys.modules[module])
@@ -53,15 +51,16 @@ class BlenditNewProject(bpy.types.Operator, ExportHelper):
     )
 
     # Get global/default git config if .gitconfig or .git/config exists
-    defaultConfig = dulwich.config.StackedConfig(dulwich.server.FileSystemBackend()).default()
     try:
-        defaultUser = defaultConfig.get("user", "name").decode("utf-8")
-    except KeyError:
-        defaultUser = "Artist"
-    try:
-        defaultEmail = defaultConfig.get("user", "email").decode("utf-8")
-    except KeyError:
-        defaultEmail = "artist@example.com"
+        defaultConfig = git.Config.get_global_config()
+    except OSError:
+        defaultConfig = {}
+    
+    defaultUser = (defaultConfig["user.name"] 
+            if "user.name"  in defaultConfig else "Artist")
+            
+    defaultEmail = (defaultConfig["user.email"] 
+            if "user.email" in defaultConfig else "artist@example.com")
     
     username: StringProperty(
         name="User",
@@ -142,26 +141,14 @@ class BlenditNewProject(bpy.types.Operator, ExportHelper):
         gitHelpers.makeGitIgnore(filepath)
 
         # Init git repo
-        repo = git.init(filepath)
+        repo = git.init_repository(filepath)
         
         # Configure git repo
         if username != self.defaultUser or email != self.defaultEmail:
             gitHelpers.configUser(repo, username, email)
 
-        # Clear info before saving .blend file
-        area = context.screen.areas[0]
-        with context.temp_override(area=area):
-            # Current area type
-            currentType = area.type
-
-            # Change area type to INFO and delete all content                
-            area.type = 'INFO'
-            bpy.ops.info.select_all(action='SELECT')
-            bpy.ops.info.report_delete()
-            bpy.ops.info.select_all(action='DESELECT')
-
-            # Restore area type
-            area.type = currentType
+        # Clear reports
+        reports.clearReports()
 
         # Init python file
         with open(os.path.join(filepath, f"{filename}.py"), "w") as file:
@@ -173,7 +160,7 @@ class BlenditNewProject(bpy.types.Operator, ExportHelper):
         bpy.ops.wm.save_mainfile(filepath=os.path.join(filepath, f"{filename}.blend"))
 
         # Initial commit
-        git.commit(repo=repo, message="Initial commit - created project")
+        gitHelpers.commit(repo, "Initial commit - created project")
 
         return {'FINISHED'}
 

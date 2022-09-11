@@ -1,40 +1,106 @@
 import os
-from io import StringIO
+from datetime import datetime, timezone, timedelta
 
-from dulwich import porcelain as git
-from dulwich.errors import NotGitRepository
+import pygit2 as git
+from pygit2._pygit2 import GitError
 
-def getCommits(path):
-    """Returns a list of dicts of commits"""
-    output = StringIO()
+# Format: Fri Sep  2 19:36:07 2022 +0530
+GIT_TIME_FORMAT = "%c %z"
 
+
+def getLastModifiedStr(date):
+    """
+    Returns last modified string
+    date: offset-aware datetime.datetime object
+    """
+
+    # Get time difference            
+    now = datetime.now(timezone.utc)    
+    delta = now - date
+
+    output = ""
+
+    days = delta.days
+    if days <= 0:
+        hours = delta.seconds // 3600
+        if hours <= 0:
+            mins = (delta.seconds // 60) % 60
+            if mins <= 0:
+                secs = delta.seconds - hours * 3600 - mins * 60
+                if secs <= 0:
+                    output = "now"
+                
+                # Secs
+                elif secs == 1:
+                    output = f"{secs} sec"
+                else:
+                    output = f"{secs} sec"
+
+            # Mins
+            elif mins == 1:
+                output = f"{mins} min"
+            else:
+                output = f"{mins} mins"
+
+        # Hours
+        elif hours == 1:
+            output = f"{hours} hr"
+        else:
+            output = f"{hours} hrs"
+    
+    # Days
+    elif days == 1:
+        output = f"{days} day"
+    else:
+        output = f"{days} days"
+
+    return output
+
+
+def commit(repo, message):
+    """Add all and commit changes to current branch"""
+
+    repo.index.add_all()
+    repo.index.write()
+    tree = repo.index.write_tree()
+    
     try:
-        git.log(path, outstream=output)
-    except NotGitRepository:
-        return []
+        # Assuming prior commits exist
+        ref = repo.head.name
+        parents = [repo.head.target]
+    except GitError:
+        # Initial Commit
+        ref = "HEAD"
+        parents = []
+    
+    repo.create_commit(
+        ref,
+        repo.default_signature,
+        repo.default_signature,
+        message,
+        tree,
+        parents,
+    )
+
+
+def getCommits(repo):
+    """Returns a list commit objects"""
 
     commits = []
-    commitsStr = output.getvalue().split("--------------------------------------------------")
-    for commit in commitsStr:
-        if not commit:
-            continue
+    last = repo[repo.head.target]
+    for commit in repo.walk(last.id, git.GIT_SORT_TIME):
+        timezoneInfo = timezone(timedelta(minutes=commit.author.offset))
+        datetimeString = datetime.fromtimestamp(float(commit.author.time),
+                                            timezoneInfo).strftime(GIT_TIME_FORMAT)
 
         commitDict = {}
-        pairs = commit.split("\n")
-        for pair in pairs:
-            if not pair:
-                continue
-            
-            split = pair.split(": ", 1)
-            length = len(split)
-            if length == 2:
-                commitDict[split[0].lower()] = split[1].strip(" \t\n\r")
-            elif length == 1:
-                commitDict["message"] = pair
+        commitDict["id"] = commit.hex
+        commitDict["name"] = commit.author.name
+        commitDict["email"] = commit.author.email
+        commitDict["date"] = datetimeString
+        commitDict["message"] = commit.message.strip(" \t\n\r")
 
         commits.append(commitDict)
-
-    output.close()
 
     return commits
 
@@ -61,10 +127,7 @@ def makeGitIgnore(path):
         file.write(content)
 
 def configUser(repo, name, email):
-    """Set user.name and user.email to the given Dulwich Repo object"""
+    """Set user.name and user.email to the given Repo object"""
 
-    config = repo.get_config()
-    config.set(("user"), "name", name)
-    config.set(("user"), "email", email)
-    config.write_to_path(config.path)
-    repo.close()
+    repo.config["User.name"] = name
+    repo.config["User.email"] = email

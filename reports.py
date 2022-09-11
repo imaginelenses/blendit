@@ -4,8 +4,10 @@ import bpy
 def getReports():
     """Returns a list of reports as seen in the Info area"""
     
-    area = bpy.context.screen.areas[0]
-    with bpy.context.temp_override(area=area):
+    window = bpy.context.window_manager.windows[0]
+    area = window.screen.areas[0]
+    with bpy.context.temp_override(window=window, area=area):
+
         # Current area type
         currentType = area.type
 
@@ -28,7 +30,8 @@ def ignoreReport(report):
 
     ignoreReportList = [
         "bpy.context.space_data.",
-        "bpy.data.window_managers["
+        "bpy.data.window_managers[",
+        "bpy.context.window_manager.blendit"
     ]
     for s in ignoreReportList:
         if report.startswith(s):
@@ -65,8 +68,10 @@ def getCommands():
 def clearReports():
     """Clears reports seen in the Info area"""
 
-    area = bpy.context.screen.areas[0]
-    with bpy.context.temp_override(area=area):
+    window = bpy.context.window_manager.windows[-1]
+    area = window.screen.areas[0]
+    with bpy.context.temp_override(window=window, area=area):
+
         # Current area type
         currentType = area.type
 
