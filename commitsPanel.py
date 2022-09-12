@@ -11,7 +11,7 @@ import pygit2 as git
 from pygit2._pygit2 import GitError
 
 # Local imports implemented to support Blender refreshes
-modulesNames = ["gitHelpers", "openProject", "sourceControl"]
+modulesNames = ("gitHelpers", "openProject", "sourceControl")
 for module in modulesNames:
     if module in sys.modules:
         importlib.reload(sys.modules[module])
@@ -63,9 +63,14 @@ class BlenditPanelData(PropertyGroup):
         except GitError:
             return
 
+        # Ensure value is not active branch
+        value = context.window_manager.blendit.branches
+        activeBranch = repo.head.shorthand
+        if value == activeBranch:
+            return
+
         # Get branch fullname
-        name = context.window_manager.blendit.branches
-        branch = repo.lookup_branch(name)
+        branch = repo.lookup_branch(value)
         if not branch:
             return
 
@@ -258,6 +263,7 @@ class BlenditSubPanel2(BlenditPanelMixin, Panel):
         commit.message = message
 
 
+"""ORDER MATTERS"""
 classes = (BlenditCommitsListItem, BlenditPanelData, BlenditPanel, 
            BlenditCommitsList, BlenditNewBranchPanel, BlenditSubPanel1, 
            BlenditSubPanel2)

@@ -10,7 +10,7 @@ import pygit2 as git
 from pygit2._pygit2 import GitError
 
 # Local imports implemented to support Blender refreshes
-modulesNames = ["gitHelpers", "reports", "subscriptions"]
+modulesNames = ("gitHelpers", "reports", "subscriptions")
 for module in modulesNames:
     if module in sys.modules:
         importlib.reload(sys.modules[module])
@@ -85,7 +85,8 @@ class BlenditOpenProject(bpy.types.Operator, ExportHelper):
                 self.username = repo.config["user.name"]
                 self.email = repo.config["user.email"]
         except GitError:
-            layout.label(text="Cannot find Blendit project at this location.", icon="ERROR")
+            layout.label(text="Cannot find Blendit project at this location.",
+                         icon="ERROR")
 
         if not self.username.strip():
             layout.label(text="Username cannot be empty.", icon="ERROR")

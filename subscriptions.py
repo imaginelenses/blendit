@@ -34,12 +34,12 @@ def activeObjectCallback():
 
     objectsToSelect  = bpy.context.view_layer.objects.selected.keys()
     objectToActivate = bpy.context.view_layer.objects.active.__repr__()
-    lines = [
+    lines = (
         "[obj.select_set(False) for obj in bpy.context.view_layer.objects.selected.values()]",
         f"[bpy.context.view_layer.objects.get(obj).select_set(True) for obj in {objectsToSelect}]",
         f"bpy.context.view_layer.objects.active = {objectToActivate}"
         "bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)"
-    ]
+    )
     bpy.app.timers.register(functools.partial(writeToFile, lines))
 
 

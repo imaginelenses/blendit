@@ -9,7 +9,7 @@ from bpy.props import StringProperty
 import pygit2 as git
 
 # Local imports implemented to support Blender refreshes
-modulesNames = ["gitHelpers", "reports"]
+modulesNames = ("gitHelpers", "reports")
 for module in modulesNames:
     if module in sys.modules:
         importlib.reload(sys.modules[module])

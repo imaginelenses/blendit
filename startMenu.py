@@ -4,7 +4,7 @@ import importlib
 import bpy
 
 # Local imports implemented to support Blender refreshes
-modulesNames = ["newProject", "openProject"]
+modulesNames = ("newProject", "openProject")
 for module in modulesNames:
     if module in sys.modules:
         importlib.reload(sys.modules[module])
@@ -17,8 +17,10 @@ def drawFileMenu(self, context, layout=None):
     if not layout:
         layout = self.layout
     
-    layout.operator(newProject.BlenditNewProject.bl_idname, text="New Project", icon='NEWFOLDER')
-    layout.operator(openProject.BlenditOpenProject.bl_idname, text="Open Project", icon='FILE_FOLDER')
+    layout.operator(newProject.BlenditNewProject.bl_idname, 
+                    text="New Project", icon='NEWFOLDER')
+    layout.operator(openProject.BlenditOpenProject.bl_idname, 
+                    text="Open Project", icon='FILE_FOLDER')
     layout.separator()
 
 
@@ -36,8 +38,10 @@ def drawStartMenu(self, context):
     col2 = split.column()
     col2.label(text="Getting Started")
 
-    col2.operator("wm.url_open", text="Blendit Website", icon='URL').url = "https://imaginelenses.com"
-    col2.operator("wm.url_open", text="About Git", icon='URL').url = "https://git-scm.com/about"
+    col2.operator("wm.url_open", text="Blendit Website", 
+                  icon='URL').url = "https://imaginelenses.com"
+    col2.operator("wm.url_open", text="About Git", 
+                  icon='URL').url = "https://git-scm.com/about"
 
     col2.separator()
 
