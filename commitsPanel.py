@@ -23,7 +23,7 @@ for module in modulesNames:
 BRANCH_ICON = 'IPO_BEZIER'
 NEW_BRANCH_ICON = 'ADD'
 CLEAR_ICON = 'X'
-COMMENT_ICON = 'IPO_BEZIER'
+COMMENT_ICON = 'LAYER_USED'
 
 
 class BlenditCommitsListItem(PropertyGroup):
@@ -77,9 +77,6 @@ class BlenditPanelData(PropertyGroup):
         # Checkout branch
         ref = repo.lookup_reference(branch.name)
         repo.checkout(ref)
-
-        # Load new blend file
-        bpy.ops.wm.read_homefile(app_template="blendit")
 
         # Regen file
         openProject.regenFile(filepath, filename)
@@ -163,7 +160,7 @@ class BlenditNewBranchPanel(BlenditPanelMixin, Panel):
             row.enabled = False
 
         branch = row.operator(sourceControl.BlenditNewBranch.bl_idname, 
-                        text="Create Branch")
+                              text="Create Branch")
         branch.name = name
 
 
@@ -184,6 +181,9 @@ class BlenditSubPanel1(BlenditPanelMixin, Panel):
         col.popover(BlenditNewBranchPanel.bl_idname, icon=NEW_BRANCH_ICON)
 
     def draw(self, context):
+        filepath = bpy.path.abspath("//")
+        filename = bpy.path.basename(bpy.data.filepath).split(".")[0]
+
         layout = self.layout
         blendit = context.window_manager.blendit
 
@@ -202,9 +202,22 @@ class BlenditSubPanel1(BlenditPanelMixin, Panel):
         )
 
         if blendit.commitsList and blendit.commitsListIndex != 0:
+            try:
+                repo = git.Repository(filepath)
+            except GitError:
+                return
+
+            if bpy.data.is_dirty:
+                row = layout.row()
+                row.label(text="Unsaved will be lost.", icon='ERROR')
+
+            if repo.status_file(f"{filename}.py") != git.GIT_STATUS_CURRENT:
+                row = layout.row()
+                row.label(text="Uncommited will be lost.", icon='ERROR')
+
             row = layout.row()
-            switch = row.operator(sourceControl.BlenditSwitchToCommit.bl_idname, 
-                                  text="Switch to Commit")
+            switch = row.operator(sourceControl.BlenditRevertToCommit.bl_idname, 
+                                  text="Revert to Commit")
             switch.id = blendit.commitsList[blendit.commitsListIndex]["id"]
         
         # Add commits to list
@@ -212,6 +225,9 @@ class BlenditSubPanel1(BlenditPanelMixin, Panel):
 
 
 def addCommitsToList():
+    """Add commits to list"""
+
+    # Get list
     commitsList = bpy.context.window_manager.blendit.commitsList
     
     # Clear list

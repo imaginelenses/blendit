@@ -39,6 +39,9 @@ def savePostHandler(_):
     filepath = bpy.path.abspath("//")
     filename = bpy.path.basename(bpy.data.filepath).split(".")[0]
 
+    # Apply all transforms
+    # bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+
     commands = reports.getCommands()
 
     with open(os.path.join(filepath, f"{filename}.py"), "a") as file: 

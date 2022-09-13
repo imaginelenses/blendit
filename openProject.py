@@ -10,13 +10,16 @@ import pygit2 as git
 from pygit2._pygit2 import GitError
 
 # Local imports implemented to support Blender refreshes
-modulesNames = ("gitHelpers", "reports", "subscriptions")
+modulesNames = ("gitHelpers", "reports", "subscriptions", "appHandlers")
 for module in modulesNames:
     if module in sys.modules:
         importlib.reload(sys.modules[module])
     else:
         parent = '.'.join(__name__.split('.')[:-1])
         globals()[module] = importlib.import_module(f"{parent}.{module}")
+
+
+OPEN_PROJECT_ICON = 'FILE_FOLDER'
 
 
 class BlenditOpenProject(bpy.types.Operator, ExportHelper):
@@ -43,6 +46,7 @@ class BlenditOpenProject(bpy.types.Operator, ExportHelper):
     filename: StringProperty(
         name="Name",
         description="Name of the project",
+        options={'TEXTEDIT_UPDATE'},
         subtype='FILE_NAME'
     )
 
@@ -62,12 +66,14 @@ class BlenditOpenProject(bpy.types.Operator, ExportHelper):
         name="User",
         default=defaultUser,
         description="Username of the artist.",
+        options={'TEXTEDIT_UPDATE'},
     )
     
     email: StringProperty(
         name="Email",
         default=defaultEmail,
         description="Email of the artist.",
+        options={'TEXTEDIT_UPDATE'},
     )
 
 
@@ -76,7 +82,7 @@ class BlenditOpenProject(bpy.types.Operator, ExportHelper):
         self.email = self.defaultEmail
 
         layout = self.layout.box()        
-        layout.label(text="Open Project")
+        layout.label(text="Open Project", icon=OPEN_PROJECT_ICON)
 
         # Get repo user details
         try:
@@ -120,12 +126,19 @@ class BlenditOpenProject(bpy.types.Operator, ExportHelper):
             repo = git.Repository(filepath)
             gitHelpers.configUser(repo, username, email)
         
-        regenFile(filepath, filename)
+        try:
+            regenFile(filepath, filename)
+        except FileNotFoundError:
+            self.report({'ERROR_INVALID_INPUT'}, "Blendit projecy not found.")
+            return {'CANCELLED'}
 
         return {'FINISHED'}
 
 
 def regenFile(filepath, filename):
+    # Load new blend file
+    bpy.ops.wm.read_homefile(app_template="blendit")
+
     # Unsubscribe message busses
     subscriptions.unsubscribe()
 
@@ -150,20 +163,14 @@ def regenFile(filepath, filename):
     # Clear reports
     reports.clearReports()
 
-    # Get save pre handler
-    savePreHandler = None
-    for handler in bpy.app.handlers.save_pre:
-        if handler.__name__ == "savePreHandler":
-            savePreHandler = handler
-
     # Unregister save pre handler
-    bpy.app.handlers.save_pre.remove(savePreHandler)
+    bpy.app.handlers.save_pre.remove(appHandlers.savePreHandler)
 
     # Save .blend file
     bpy.ops.wm.save_mainfile(filepath=os.path.join(filepath, f"{filename}.blend"))
 
     # Re-register save pre handler
-    bpy.app.handlers.save_pre.append(savePreHandler)
+    bpy.app.handlers.save_pre.append(appHandlers.savePreHandler)
 
     # Re-subscribe to message busses
     subscriptions.subscribe()

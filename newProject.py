@@ -9,13 +9,16 @@ from bpy.props import StringProperty
 import pygit2 as git
 
 # Local imports implemented to support Blender refreshes
-modulesNames = ("gitHelpers", "reports")
+modulesNames = ("gitHelpers", "reports", "appHandlers")
 for module in modulesNames:
     if module in sys.modules:
         importlib.reload(sys.modules[module])
     else:
         parent = '.'.join(__name__.split('.')[:-1])
         globals()[module] = importlib.import_module(f"{parent}.{module}")
+
+
+NEW_PROJECT_ICON = 'NEWFOLDER'
 
 
 class BlenditNewProject(bpy.types.Operator, ExportHelper):
@@ -42,6 +45,7 @@ class BlenditNewProject(bpy.types.Operator, ExportHelper):
     filename: StringProperty(
         name="Name",
         description="Name of the project",
+        options={'TEXTEDIT_UPDATE'},
         subtype='FILE_NAME'
     )
     
@@ -66,19 +70,21 @@ class BlenditNewProject(bpy.types.Operator, ExportHelper):
         name="User",
         default=defaultUser,
         description="Username of the artist",
+        options={'TEXTEDIT_UPDATE'},
     )
     
     email: StringProperty(
         name="Email",
         default=defaultEmail,
         description="Email of the artist",
+        options={'TEXTEDIT_UPDATE'},
     )
     
 
     def draw(self, context):
         layout = self.layout.box()
         
-        layout.label(text="Create New Project")
+        layout.label(text="Create New Project", icon=NEW_PROJECT_ICON)
         
         if not self.filename.strip():
             layout.label(text="Name cannot be empty.", icon="ERROR")
@@ -156,8 +162,14 @@ class BlenditNewProject(bpy.types.Operator, ExportHelper):
             file.write("def executeCommands():\n")
             file.write("\tpass\n")
 
+        # Unregister save pre handler
+        bpy.app.handlers.save_pre.remove(appHandlers.savePreHandler)
+
         # Save .blend file
         bpy.ops.wm.save_mainfile(filepath=os.path.join(filepath, f"{filename}.blend"))
+
+        # Re-register save pre handler
+        bpy.app.handlers.save_pre.append(appHandlers.savePreHandler)
 
         # Initial commit
         gitHelpers.commit(repo, "Initial commit - created project")

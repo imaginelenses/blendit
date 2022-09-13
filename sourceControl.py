@@ -8,9 +8,10 @@ from bpy.props import StringProperty
 
 import pygit2 as git
 from pygit2._pygit2 import GitError
+from pygit2 import GIT_RESET_SOFT, GIT_RESET_HARD
 
 # Local imports implemented to support Blender refreshes
-modulesNames = ("gitHelpers", )
+modulesNames = ("gitHelpers", "openProject")
 for module in modulesNames:
     if module in sys.modules:
         importlib.reload(sys.modules[module])
@@ -58,11 +59,11 @@ class BlenditNewBranch(Operator):
         return {'FINISHED'}
 
 
-class BlenditSwitchToCommit(Operator):
-    """Switch to Commit"""
+class BlenditRevertToCommit(Operator):
+    """Revert to Commit"""
 
     bl_label = __doc__
-    bl_idname = "blendit.switch_to_commit"
+    bl_idname = "blendit.revert_to_commit"
 
     id: StringProperty(
         name="",
@@ -70,8 +71,43 @@ class BlenditSwitchToCommit(Operator):
     )
 
     def invoke(self, context, event):
-        # TODO Switch to commit
-        print(f"Switch to commit. {self.id}")
+        filepath = bpy.path.abspath("//")
+        filename = bpy.path.basename(bpy.data.filepath).split(".")[0]
+
+        # Save .blend file (Writes commands to Python file and clears reports)
+        bpy.ops.wm.save_mainfile(filepath=os.path.join(filepath, f"{filename}.blend"))
+
+        # Get repo
+        try:
+            repo = git.Repository(filepath)
+        except GitError:
+            return {'CANCELLED'}
+
+        latestCommit = repo[repo.head.target]
+        revertCommit = repo.get(self.id)
+        if latestCommit.hex == revertCommit.hex:
+            return {'CANCELLED'}
+
+        """
+            https://stackoverflow.com/a/1470452
+
+            A <-- B <-- C <-- D            <-- master <-- HEAD
+            
+            Revert to A
+            
+            $ git reset A --hard
+            $ git reset D --soft
+            $ git commit
+            
+            A <-- B <-- C <-- D <-- A'     <-- master <-- HEAD
+        """
+        repo.reset(revertCommit.oid, GIT_RESET_HARD)
+        repo.reset(latestCommit.oid, GIT_RESET_SOFT)
+        gitHelpers.commit(repo, f"Reverted to commit: {revertCommit.hex[:7]}")
+
+        # Regen file
+        openProject.regenFile(filepath, filename)
+
         return {'FINISHED'}
 
 
@@ -110,7 +146,7 @@ class BlenditCommit(Operator):
         return {'FINISHED'}
 
 
-classes = (BlenditNewBranch, BlenditSwitchToCommit, BlenditCommit)
+classes = (BlenditNewBranch, BlenditRevertToCommit, BlenditCommit)
 
 def register():
     for cls in classes:

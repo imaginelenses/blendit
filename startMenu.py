@@ -18,9 +18,9 @@ def drawFileMenu(self, context, layout=None):
         layout = self.layout
     
     layout.operator(newProject.BlenditNewProject.bl_idname, 
-                    text="New Project", icon='NEWFOLDER')
+                    text="New Project", icon=newProject.NEW_PROJECT_ICON)
     layout.operator(openProject.BlenditOpenProject.bl_idname, 
-                    text="Open Project", icon='FILE_FOLDER')
+                    text="Open Project", icon=openProject.OPEN_PROJECT_ICON)
     layout.separator()
 
 
