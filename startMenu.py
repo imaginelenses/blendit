@@ -9,7 +9,7 @@ for module in modulesNames:
     if module in sys.modules:
         importlib.reload(sys.modules[module])
     else:
-        parent = '.'.join(__name__.split('.')[:-1])
+        parent = ".".join(__name__.split(".")[:-1])
         globals()[module] = importlib.import_module(f"{parent}.{module}")
 
 
@@ -39,7 +39,7 @@ def drawStartMenu(self, context):
     col2.label(text="Getting Started")
 
     col2.operator("wm.url_open", text="Blendit Website", 
-                  icon='URL').url = "https://imaginelenses.com"
+                  icon='URL').url = "https://blendit.imaginelenses.com"
     col2.operator("wm.url_open", text="About Git", 
                   icon='URL').url = "https://git-scm.com/about"
 

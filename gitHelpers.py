@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, timezone, timedelta
+from unicodedata import name
 
 import pygit2 as git
 from pygit2._pygit2 import GitError
@@ -60,8 +61,13 @@ def getLastModifiedStr(date):
 def commit(repo, message):
     """Add all and commit changes to current branch"""
 
+    # Add all
     repo.index.add_all()
     repo.index.write()
+
+    name = repo.config["User.name"]
+    email = repo.config["User.email"]
+    signature = git.Signature(name, email)
     tree = repo.index.write_tree()
     
     try:
@@ -72,14 +78,14 @@ def commit(repo, message):
         # Initial Commit
         ref = "HEAD"
         parents = []
-    
+
     repo.create_commit(
-        ref,
-        repo.default_signature,
-        repo.default_signature,
-        message,
-        tree,
-        parents,
+        ref, 
+        signature, 
+        signature, 
+        message, 
+        tree, 
+        parents
     )
 
 

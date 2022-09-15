@@ -15,7 +15,7 @@ for module in modulesNames:
     if module in sys.modules:
         importlib.reload(sys.modules[module])
     else:
-        parent = '.'.join(__name__.split('.')[:-1])
+        parent = ".".join(__name__.split(".")[:-1])
         globals()[module] = importlib.import_module(f"{parent}.{module}")
 
 
@@ -105,7 +105,7 @@ class BlenditOpenProject(bpy.types.Operator, ExportHelper):
     
     def execute(self, context):
         filepath = self.filepath.strip()
-        filename = filepath.split("/")[-2]
+        filename = filepath.split(os.sep)[-2]
         username = self.username.strip()
         email = self.email.strip()
 

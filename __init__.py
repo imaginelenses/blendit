@@ -2,7 +2,7 @@ bl_info = {
     "name": "blendit",
     "authon": "imaginelenses",
     "description": "Version control for Blender.",
-    "blender": (3, 2, 0),
+    "blender": (3, 3, 0),
     "category": "Blendit"
 }
 
@@ -22,20 +22,41 @@ except ModuleNotFoundError:
 # Get executable path
 executable = sys.executable
 
-"""
-    Debian Bug: pygit2 import fails if /usr/lib/ssl/certs does not exist
-    https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1011714
-    Create ../bin/certs directory if on linux to overcome this bug
-"""
 import platform
-if platform.system() == "Linux":
-    # Create ../bin/certs directory
-    binPath = os.path.join("/", *executable.split("/")[:-1])
-    certsPath = os.path.join(binPath, "certs")
+system = platform.system()
+LINUX = "Linux"
+WINDOWS = "Windows"
+if system == LINUX:
+    """
+        Debian Bug: pygit2 import fails if /usr/lib/ssl/certs does not exist
+        https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1011714
+        Create ../bin/certs directory to overcome the bug
+        -- bin/
+            |-- python.exe (sys.executable)
+            |-- certs/
+            :
+    """
+    certsPath = os.path.abspath(os.path.join(executable, "..", "cert"))
     os.makedirs(certsPath, exist_ok=True)
 
     # Set SSL_CERT_DIR environment variable
     os.environ["SSL_CERT_DIR"] = certsPath
+elif system == WINDOWS:
+    """
+        Set pip target to ../lib/site-packages to avoid 
+        ImportError: DLL load failed while importing <module>
+        -- python/
+            |-- bin/
+            |    |-- python.exe (sys.executable)
+            |    :
+            |-- lib/
+            :    |-- site-packages/ (UAC elevation required to write)
+            :    :
+    """
+    sitePath = os.path.abspath(
+        os.path.join(executable, "..", "..", "lib", "site-packages"))
+
+    os.environ["PIP_TARGET"] = sitePath
 
 # Ensure Pygit2 is installed
 try:

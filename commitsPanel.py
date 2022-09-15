@@ -16,7 +16,7 @@ for module in modulesNames:
     if module in sys.modules:
         importlib.reload(sys.modules[module])
     else:
-        parent = '.'.join(__name__.split('.')[:-1])
+        parent = ".".join(__name__.split(".")[:-1])
         globals()[module] = importlib.import_module(f"{parent}.{module}")
 
 
