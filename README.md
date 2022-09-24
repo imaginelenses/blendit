@@ -28,7 +28,7 @@ In theory the size of the entire project should be lower than using any other VS
 
 ## Getting Started
 
-1. Download Blendit `.zip` file from [here](https://github.com/imaginelenses/blendit/archive/refs/tags/v0.1.0-alpha.zip).
+1. Download Blendit `.zip` file from [here](https://github.com/imaginelenses/blendit/archive/refs/tags/v0-1-0-alpha.zip).
 
 2. Install Blendit [Application Template](https://docs.blender.org/manual/en/latest/advanced/app_templates.html#app-templates).
         
