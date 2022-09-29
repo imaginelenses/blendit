@@ -9,7 +9,7 @@ from bpy.props import StringProperty
 import pygit2 as git
 
 # Local imports implemented to support Blender refreshes
-modulesNames = ("gitHelpers", "reports", "appHandlers")
+modulesNames = ("gitHelpers", "reports")
 for module in modulesNames:
     if module in sys.modules:
         importlib.reload(sys.modules[module])
@@ -161,14 +161,8 @@ class BlenditNewProject(bpy.types.Operator, ExportHelper):
             file.write("def executeCommands():\n")
             file.write("\tpass\n")
 
-        # Unregister save pre handler
-        bpy.app.handlers.save_pre.remove(appHandlers.savePreHandler)
-
         # Save .blend file
         bpy.ops.wm.save_mainfile(filepath=os.path.join(filepath, f"{filename}.blend"))
-
-        # Re-register save pre handler
-        bpy.app.handlers.save_pre.append(appHandlers.savePreHandler)
 
         # Initial commit
         gitHelpers.commit(repo, "Initial commit - created project")
