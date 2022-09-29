@@ -163,15 +163,9 @@ def regenFile(filepath, filename):
     # Clear reports
     reports.clearReports()
 
-    # Unregister save pre handler
-    bpy.app.handlers.save_pre.remove(appHandlers.savePreHandler)
-
     # Save .blend file
     bpy.ops.wm.save_mainfile(filepath=os.path.join(filepath, f"{filename}.blend"))
-
-    # Re-register save pre handler
-    bpy.app.handlers.save_pre.append(appHandlers.savePreHandler)
-
+    
     # Re-subscribe to message busses
     subscriptions.subscribe()
 

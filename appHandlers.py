@@ -28,13 +28,6 @@ def loadPreferencesHandler(_):
 
 
 @persistent
-def savePreHandler(_):
-    # Create project if not already created
-    if not bpy.path.abspath("//"):
-        bpy.ops.blendit.new_project('INVOKE_DEFAULT')
-
-
-@persistent
 def savePostHandler(_):
     filepath = bpy.path.abspath("//")
     filename = bpy.path.basename(bpy.data.filepath).split(".")[0]
@@ -62,7 +55,6 @@ def loadPostHandler(_):
 def register():
     print("Registering to Change Defaults")
     handlers.load_post.append(loadPostHandler)
-    handlers.save_pre.append(savePreHandler)
     handlers.save_post.append(savePostHandler)
     handlers.load_factory_preferences_post.append(loadPreferencesHandler)
 
@@ -70,7 +62,6 @@ def register():
 def unregister():
     print("Unregistering to Change Defaults")
     handlers.load_post.remove(loadPostHandler)
-    handlers.save_pre.remove(savePreHandler)
     handlers.save_post.remove(savePostHandler)
     handlers.load_factory_preferences_post.remove(loadPreferencesHandler)
 
