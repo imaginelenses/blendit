@@ -129,7 +129,7 @@ class BlenditOpenProject(bpy.types.Operator, ExportHelper):
         try:
             regenFile(filepath, filename)
         except FileNotFoundError:
-            self.report({'ERROR_INVALID_INPUT'}, "Blendit projecy not found.")
+            self.report({'ERROR_INVALID_INPUT'}, "Blendit project not found.")
             return {'CANCELLED'}
 
         return {'FINISHED'}
